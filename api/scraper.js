@@ -29,65 +29,81 @@ let sessionCache = {
   expiresAt: 0
 };
 
+// Logowanie przez GameForge
 async function login() {
-  console.log('[SCRAPER] Logowanie do KingsAge...');
+  console.log('[SCRAPER] Logowanie przez GameForge...');
   
-  const lobbyRes = await fetch('https://lobby.kingsage.gameforge.com/api/v1/auth/studios', {
+  // 1. Logowanie do GameForge lobby
+  const loginRes = await fetch('https://lobby.kingsage.gameforge.com/api/v1/auth/studios', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      identity: process.env.KA_USERNAME,
-      password: process.env.KA_PASSWORD,
+      identity: process.env.KA_USERNAME,  // Email GameForge
+      password: process.env.KA_PASSWORD,  // Hasło GameForge
       locale: 'pl'
     })
   });
   
-  if (!lobbyRes.ok) throw new Error('Login failed: ' + lobbyRes.status);
-  const lobby = await lobbyRes.json();
+  if (!loginRes.ok) {
+    throw new Error(`Login failed: ${loginRes.status} ${await loginRes.text()}`);
+  }
   
-  const serversRes = await fetch(`https://lobby.kingsage.gameforge.com/api/v1/auth/sessions/${lobby.id}/accounts`);
-  const servers = await serversRes.json();
+  const loginData = await loginRes.json();
+  const sessionId = loginData.id;
   
+  // 2. Pobierz listę dostępnych kont/serwerów
+  const accountsRes = await fetch(`https://lobby.kingsage.gameforge.com/api/v1/auth/sessions/${sessionId}/accounts`);
+  const accounts = await accountsRes.json();
+  
+  // 3. Znajdź nasz serwer (np. s64-pl)
   const serverLang = process.env.KA_SERVER.match(/s\d+-([a-z]+)/)?.[1] || 'pl';
-  const target = servers.find(s => s.language === serverLang);
-  if (!target) throw new Error('Nie znaleziono serwera ' + serverLang);
+  const targetAccount = accounts.find(acc => acc.language === serverLang);
   
-  const loginRes = await fetch(`https://lobby.kingsage.gameforge.com/api/v1/auth/sessions/${lobby.id}/accounts/${target.id}/login?locale=pl`, {
-    method: 'POST',
+  if (!targetAccount) {
+    throw new Error(`Nie znaleziono serwera ${serverLang}. Dostępne: ${accounts.map(a => a.language).join(', ')}`);
+  }
+  
+  // 4. Zaloguj do konkretnego serwera
+  const serverLoginRes = await fetch(`https://lobby.kingsage.gameforge.com/api/v1/auth/sessions/${sessionId}/accounts/${targetAccount.id}/login?locale=pl`, {
+    method: 'POST'
+  });
+  
+  const serverLoginData = await serverLoginRes.json();
+  
+  // 5. Przekierowanie do gry - pobierz cookies
+  const gameRes = await fetch(serverLoginData.url, {
     redirect: 'manual'
   });
   
-  const cookies = loginRes.headers.raw()['set-cookie'] || [];
-  const portalCookie = cookies.find(c => c.includes('portal_'));
-  if (!portalCookie) throw new Error('Brak cookies po logowaniu');
+  // 6. Wyciągnij sid z cookies
+  const cookies = gameRes.headers.raw()['set-cookie'] || [];
+  const sidCookie = cookies.find(c => c.includes('sid='));
   
-  const redirectUrl = loginRes.headers.get('location');
-  if (!redirectUrl) throw new Error('Brak redirect URL');
-  
-  const gameRes = await fetch(redirectUrl, {
-    headers: { 'Cookie': portalCookie },
-    redirect: 'follow'
-  });
-  
-  const gameCookies = gameRes.headers.raw()['set-cookie'] || [];
-  const sidCookie = gameCookies.find(c => c.includes('sid='));
-  if (sidCookie) {
-    sessionCache.sessionId = sidCookie.match(/sid=([^;]+)/)?.[1];
+  if (!sidCookie) {
+    throw new Error('Brak sid cookie po logowaniu');
   }
   
+  sessionCache.sessionId = sidCookie.match(/sid=([^;]+)/)?.[1];
+  
+  // 7. Pobierz villageId
   const homeRes = await fetch(process.env.KA_SERVER + '/game.php?village=0', {
     headers: { 'Cookie': `sid=${sessionCache.sessionId}` },
     redirect: 'follow'
   });
+  
   const homeHtml = await homeRes.text();
   const match = homeHtml.match(/village=(\d+)/);
-  if (match) sessionCache.villageId = match[1];
   
+  if (match) {
+    sessionCache.villageId = match[1];
+  }
+  
+  // 8. Pobierz szybkość serwera
   await fetchServerSpeed();
   
   sessionCache.expiresAt = Date.now() + 25 * 60 * 1000;
   
-  console.log(`[SCRAPER] ✅ Zalogowano (village=${sessionCache.villageId})`);
+  console.log(`[SCRAPER] ✅ Zalogowano (village=${sessionCache.villageId}, speed=${sessionCache.serverSpeed})`);
   return true;
 }
 
@@ -98,6 +114,7 @@ async function fetchServerSpeed() {
     });
     const html = await res.text();
     const $ = cheerio.load(html);
+    
     $('table.borderlist tr').each((_, row) => {
       const cells = $(row).find('td');
       if (cells.length >= 2) {
