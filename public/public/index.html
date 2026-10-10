@@ -1,1 +1,533 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏰 Żywa Flaga KCS</title>
+<script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #eee;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 10px;
+    border: 2px solid #d4af37;
+  }
+  .header h1 { color: #d4af37; font-size: 24px; }
+  .status {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 10px;
+    font-size: 13px;
+    flex-wrap: wrap;
+  }
+  .status span { padding: 4px 10px; background: rgba(0,0,0,0.5); border-radius: 5px; }
+  .status .live { color: #0f0; }
+  
+  .discord-config {
+    margin-bottom: 15px;
+    padding: 15px;
+    background: rgba(88,101,242,0.2);
+    border-radius: 10px;
+    border: 1px solid #5865F2;
+  }
+  .discord-config h3 { color: #5865F2; margin-bottom: 10px; font-size: 14px; }
+  .discord-config input {
+    width: 100%;
+    padding: 8px;
+    background: #1a1a1a;
+    color: #fff;
+    border: 1px solid #5865F2;
+    border-radius: 5px;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .discord-config button {
+    padding: 8px 16px;
+    background: #5865F2;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+    margin-right: 5px;
+  }
+  .discord-config button:hover { background: #4752C4; }
+  
+  .filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 15px;
+    padding: 15px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 10px;
+    border: 1px solid #555;
+  }
+  .filters select, .filters input {
+    width: 100%;
+    padding: 8px;
+    background: #2a2a2a;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+  .filters label {
+    display: block;
+    color: #d4af37;
+    font-size: 11px;
+    margin-bottom: 4px;
+    font-weight: bold;
+  }
+  
+  .unit-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 10px;
+  }
+  .unit-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 5px;
+    cursor: pointer;
+    color: #ccc;
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+  .unit-btn:hover { background: #3a3a3a; }
+  .unit-btn.active { background: #4a8020; border-color: #6ab030; color: #fff; }
+  .unit-btn img { width: 20px; height: 20px; }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: rgba(0,0,0,0.4);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  th {
+    background: #2a1a0a;
+    color: #d4af37;
+    padding: 10px;
+    text-align: left;
+    font-size: 13px;
+    border-bottom: 2px solid #d4af37;
+  }
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #333;
+    font-size: 13px;
+  }
+  tr:hover { background: rgba(212, 175, 55, 0.1); }
+  tr.snob { background: rgba(255, 0, 0, 0.3) !important; }
+  tr.snob:hover { background: rgba(255, 0, 0, 0.4) !important; }
+  tr.new-attack { animation: flash 2s ease-in-out; }
+  @keyframes flash {
+    0% { background: rgba(0, 255, 0, 0.5); }
+    100% { background: transparent; }
+  }
+  
+  .unit-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-right: 5px;
+  }
+  .unit-icon img { width: 18px; height: 18px; }
+  
+  .coords { font-family: monospace; color: #4a9eff; }
+  .player { color: #fff; font-weight: bold; }
+  .ally { color: #aaa; font-size: 11px; }
+  .time { color: #ffd700; font-weight: bold; }
+  .return { color: #888; font-size: 11px; }
+  
+  .counter {
+    text-align: center;
+    padding: 8px;
+    color: #888;
+    font-size: 12px;
+  }
+  
+  .empty {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+    font-size: 16px;
+  }
+  
+  .connection-status {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+  }
+  .connection-status.connected { background: #0f0; box-shadow: 0 0 5px #0f0; }
+  .connection-status.disconnected { background: #f00; box-shadow: 0 0 5px #f00; }
+</style>
+</head>
+<body>
 
+<div class="header">
+  <h1>🏰 Żywa Flaga Sojuszu</h1>
+  <div class="status">
+    <span class="live"><span class="connection-status disconnected" id="conn-status"></span><span id="conn-text">Łączenie...</span></span>
+    <span id="attack-count">Ataków: 0</span>
+    <span id="last-update">Ostatnia aktualizacja: -</span>
+  </div>
+</div>
+
+<div class="discord-config">
+  <h3>🔔 Konfiguracja Discord (opcjonalnie)</h3>
+  <input type="text" id="webhook-all" placeholder="Webhook URL - wszystkie ataki">
+  <input type="text" id="webhook-snob" placeholder="Webhook URL - tylko hrabia">
+  <button onclick="saveWebhooks()">💾 Zapisz</button>
+  <button onclick="testWebhook()">🧪 Test</button>
+  <div id="discord-status" style="margin-top:8px;font-size:11px;color:#888;"></div>
+</div>
+
+<div class="filters">
+  <div>
+    <label>🏰 Obrońca</label>
+    <select id="filter-target"><option value="">Wszyscy</option></select>
+  </div>
+  <div>
+    <label>⚔️ Atakujący</label>
+    <select id="filter-source"><option value="">Wszyscy</option></select>
+  </div>
+  <div>
+    <label>👤 Gracz (dowolny)</label>
+    <select id="filter-player"><option value="">Wszyscy</option></select>
+  </div>
+  <div>
+    <label>🔍 Szukaj</label>
+    <input type="text" id="filter-search" placeholder="Nazwa, koordy...">
+  </div>
+</div>
+
+<div class="unit-buttons" id="unit-buttons"></div>
+
+<div class="counter" id="counter">Ładowanie...</div>
+
+<table id="attacks-table">
+  <thead>
+    <tr>
+      <th>Jednostki</th>
+      <th>Obrońca / Cel</th>
+      <th>Atakujący / Skąd</th>
+      <th>Przybycie</th>
+      <th>Powrót</th>
+    </tr>
+  </thead>
+  <tbody id="attacks-body"></tbody>
+</table>
+
+<script>
+const PUSHER_KEY = '21413eb5e4ecff967aa7';
+const PUSHER_CLUSTER = 'eu';
+
+const pusher = new Pusher(PUSHER_KEY, {
+  cluster: PUSHER_CLUSTER,
+  forceTLS: true
+});
+
+const channel = pusher.subscribe('flaga-channel');
+
+let attacks = [];
+let previousAttackIds = new Set();
+let activeUnit = '';
+let sentToDiscord = new Set(JSON.parse(localStorage.getItem('sentToDiscord') || '[]'));
+
+const UNIT_ICONS = {
+  farmer: '/img/units/unit_farmer.png', sword: '/img/units/unit_sword.png',
+  spear: '/img/units/unit_spear.png', axe: '/img/units/unit_axe.png',
+  bow: '/img/units/unit_bow.png', spy: '/img/units/unit_spy.png',
+  light: '/img/units/unit_light.png', heavy: '/img/units/unit_heavy.png',
+  ram: '/img/units/unit_ram.png', kata: '/img/units/unit_kata.png',
+  snob: '/img/units/unit_snob.png'
+};
+
+pusher.connection.bind('connected', () => {
+  document.getElementById('conn-status').className = 'connection-status connected';
+  document.getElementById('conn-text').textContent = 'LIVE';
+});
+
+pusher.connection.bind('disconnected', () => {
+  document.getElementById('conn-status').className = 'connection-status disconnected';
+  document.getElementById('conn-text').textContent = 'Rozłączono';
+});
+
+pusher.connection.bind('error', (err) => {
+  console.error('[PUSHER] Error:', err);
+  document.getElementById('conn-status').className = 'connection-status disconnected';
+  document.getElementById('conn-text').textContent = 'Błąd połączenia';
+});
+
+channel.bind('update', (data) => {
+  attacks = data.attacks || [];
+  checkNewAttacks();
+  render();
+});
+
+function checkNewAttacks() {
+  const newAttacks = attacks.filter(a => !previousAttackIds.has(a.id));
+  
+  if (newAttacks.length > 0 && previousAttackIds.size > 0) {
+    setTimeout(() => {
+      newAttacks.forEach(a => {
+        const row = document.querySelector(`tr[data-id="${a.id}"]`);
+        if (row) row.classList.add('new-attack');
+      });
+    }, 100);
+    
+    sendToDiscord(newAttacks);
+  }
+  
+  previousAttackIds = new Set(attacks.map(a => a.id));
+}
+
+async function sendToDiscord(newAttacks) {
+  const webhookAll = localStorage.getItem('webhook_all');
+  const webhookSnob = localStorage.getItem('webhook_snob');
+  
+  if (!webhookAll && !webhookSnob) return;
+  
+  const toSend = newAttacks.filter(a => !sentToDiscord.has(a.id));
+  if (toSend.length === 0) return;
+  
+  if (webhookAll) {
+    try {
+      await fetch('/api/discord', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attacks: toSend, webhookUrl: webhookAll })
+      });
+    } catch (e) { console.error('[DISCORD] Błąd:', e); }
+  }
+  
+  if (webhookSnob) {
+    const snobAttacks = toSend.filter(a => a.hasSnob);
+    if (snobAttacks.length > 0) {
+      try {
+        await fetch('/api/discord', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attacks: snobAttacks, webhookUrl: webhookSnob })
+        });
+      } catch (e) { console.error('[DISCORD] Błąd:', e); }
+    }
+  }
+  
+  toSend.forEach(a => sentToDiscord.add(a.id));
+  localStorage.setItem('sentToDiscord', JSON.stringify([...sentToDiscord]));
+  
+  const cutoff = Date.now() - 24 * 3600 * 1000;
+  for (const id of sentToDiscord) {
+    if (parseInt(id) < cutoff) sentToDiscord.delete(id);
+  }
+  localStorage.setItem('sentToDiscord', JSON.stringify([...sentToDiscord]));
+}
+
+function render() {
+  updateFilters();
+  applyFilters();
+  document.getElementById('attack-count').textContent = `Ataków: ${attacks.length}`;
+  document.getElementById('last-update').textContent = 
+    `Aktualizacja: ${new Date().toLocaleTimeString('pl-PL')}`;
+}
+
+function updateFilters() {
+  const targets = {}, sources = {}, players = {}, units = {};
+  
+  attacks.forEach(a => {
+    targets[a.targetPlayer] = (targets[a.targetPlayer] || 0) + 1;
+    sources[a.sourcePlayer] = (sources[a.sourcePlayer] || 0) + 1;
+    players[a.targetPlayer] = (players[a.targetPlayer] || 0) + 1;
+    players[a.sourcePlayer] = (players[a.sourcePlayer] || 0) + 1;
+    a.units.forEach(u => units[u.type] = (units[u.type] || 0) + 1);
+  });
+  
+  fillSelect('filter-target', targets, 'Wszyscy obrońcy');
+  fillSelect('filter-source', sources, 'Wszyscy atakujący');
+  fillSelect('filter-player', players, 'Wszyscy gracze');
+  
+  const unitDiv = document.getElementById('unit-buttons');
+  unitDiv.innerHTML = '';
+  Object.entries(units).sort((a,b) => b[1]-a[1]).forEach(([type, count]) => {
+    const btn = document.createElement('div');
+    btn.className = 'unit-btn' + (activeUnit === type ? ' active' : '');
+    btn.innerHTML = `<img src="${UNIT_ICONS[type]}" onerror="this.style.display='none'"> ${count}`;
+    btn.title = type;
+    btn.onclick = () => {
+      activeUnit = activeUnit === type ? '' : type;
+      render();
+    };
+    unitDiv.appendChild(btn);
+  });
+}
+
+function fillSelect(id, data, placeholder) {
+  const sel = document.getElementById(id);
+  const current = sel.value;
+  sel.innerHTML = `<option value="">${placeholder}</option>`;
+  Object.entries(data).sort((a,b) => b[1]-a[1]).forEach(([name, count]) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = `${name} (${count})`;
+    sel.appendChild(opt);
+  });
+  if (current) sel.value = current;
+}
+
+function applyFilters() {
+  const target = document.getElementById('filter-target').value;
+  const source = document.getElementById('filter-source').value;
+  const player = document.getElementById('filter-player').value;
+  const search = document.getElementById('filter-search').value.toLowerCase();
+  
+  const filtered = attacks.filter(a => {
+    if (target && a.targetPlayer !== target) return false;
+    if (source && a.sourcePlayer !== source) return false;
+    if (player && a.targetPlayer !== player && a.sourcePlayer !== player) return false;
+    if (activeUnit && !a.units.some(u => u.type === activeUnit)) return false;
+    if (search) {
+      const text = `${a.targetPlayer} ${a.sourcePlayer} ${a.targetCoords} ${a.sourceCoords} ${a.sourceAlly}`.toLowerCase();
+      if (!text.includes(search)) return false;
+    }
+    return true;
+  });
+  
+  renderTable(filtered);
+}
+
+function renderTable(list) {
+  const tbody = document.getElementById('attacks-body');
+  const counter = document.getElementById('counter');
+  
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Brak ataków</td></tr>';
+    counter.textContent = `🔍 0 / ${attacks.length}`;
+    return;
+  }
+  
+  tbody.innerHTML = list.map(a => {
+    const unitsHtml = a.units.map(u => 
+      `<span class="unit-icon"><img src="${UNIT_ICONS[u.type]}" onerror="this.style.display='none'" title="${u.name}"></span>`
+    ).join('');
+    
+    return `
+      <tr class="${a.hasSnob ? 'snob' : ''}" data-id="${a.id}">
+        <td>${unitsHtml}</td>
+        <td>
+          <div class="player">${a.targetPlayer}</div>
+          <div class="coords">${a.targetCoords}</div>
+        </td>
+        <td>
+          <div class="player">${a.sourcePlayer}</div>
+          <div class="coords">${a.sourceCoords}</div>
+          ${a.sourceAlly ? `<div class="ally">[${a.sourceAlly}]</div>` : ''}
+        </td>
+        <td class="time">${a.arrivalDate}</td>
+        <td class="return">${a.returnDate || '-'}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  counter.textContent = `🔍 ${list.length} / ${attacks.length}`;
+}
+
+function saveWebhooks() {
+  const all = document.getElementById('webhook-all').value.trim();
+  const snob = document.getElementById('webhook-snob').value.trim();
+  
+  if (all) localStorage.setItem('webhook_all', all);
+  if (snob) localStorage.setItem('webhook_snob', snob);
+  
+  document.getElementById('discord-status').innerHTML = '<span style="color:#0f0;">✅ Zapisano!</span>';
+  setTimeout(() => {
+    document.getElementById('discord-status').innerHTML = '';
+  }, 2000);
+}
+
+async function testWebhook() {
+  const all = document.getElementById('webhook-all').value.trim();
+  if (!all) {
+    alert('Wpisz najpierw webhook URL!');
+    return;
+  }
+  
+  try {
+    const res = await fetch('/api/discord', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        attacks: [{
+          id: 'test',
+          units: [{type: 'snob', name: 'Hrabia'}],
+          targetPlayer: 'TestPlayer',
+          targetCoords: '500|500',
+          sourcePlayer: 'TestAttacker',
+          sourceCoords: '600|600',
+          sourceAlly: 'TestAlly',
+          arrivalDate: new Date().toLocaleString('pl-PL'),
+          returnDate: null,
+          hasSnob: true
+        }],
+        webhookUrl: all
+      })
+    });
+    
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('discord-status').innerHTML = '<span style="color:#0f0;">✅ Test wysłany! Sprawdź Discord.</span>';
+    } else {
+      document.getElementById('discord-status').innerHTML = `<span style="color:#f00;">❌ Błąd: ${data.error}</span>`;
+    }
+  } catch (e) {
+    document.getElementById('discord-status').innerHTML = `<span style="color:#f00;">❌ Błąd: ${e.message}</span>`;
+  }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const all = localStorage.getItem('webhook_all');
+  const snob = localStorage.getItem('webhook_snob');
+  if (all) document.getElementById('webhook-all').value = all;
+  if (snob) document.getElementById('webhook-snob').value = snob;
+});
+
+['filter-target', 'filter-source', 'filter-player'].forEach(id => {
+  document.getElementById(id).addEventListener('change', applyFilters);
+});
+document.getElementById('filter-search').addEventListener('input', applyFilters);
+
+setInterval(async () => {
+  try {
+    const res = await fetch('/api/scraper');
+    const data = await res.json();
+    if (data.ok) {
+    }
+  } catch (e) {}
+}, 10000);
+</script>
+
+</body>
+</html>
